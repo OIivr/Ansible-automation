@@ -1,0 +1,23 @@
+- name: Open DNS service in firewall (port 53 TCP/UDP)
+  firewalld:
+    service: dns
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Open port 8301 UDP
+  firewalld:
+    port: 8301/udp
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Open port 8301 TCP
+  firewalld:
+    port: 8301/tcp
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Reload firewalld to apply changes
+  command: firewall-cmd --reload

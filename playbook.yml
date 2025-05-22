@@ -1,11 +1,15 @@
+# run: ansible-playbook playbook.yml -i inventory/hosts
 - hosts: all
   user: centos
   become: yes
-  become_user: root
+  vars:
+    hostname: oliver-vm
+    domain_name: se.cs.ut.ee
+    ip_address: 172.17.88.221
+    ip_last_octet: 221
+    reverse_zone_name: 88.17.172.in-addr.arpa
 
   roles:
-  - etais
-
-  tasks:
-  - name: Testing this out
-    debug: msg="Hello from user {{ ansible_user_id }} on server {{ ansible_hostname }}!"
+  - { role: etais, tags: etais }
+  - { role: firewall, tags: firewall }
+  - { role: DNS, tags: DNS }
