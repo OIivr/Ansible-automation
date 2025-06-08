@@ -11,3 +11,11 @@ $TTL 15M
 @           IN  A       {{ ip_address }}
 ns1         IN  A       {{ ip_address }}
 {{ hostname }} IN  A    {{ ip_address }}
+www               IN    CNAME   {{ hostname }}.{{ domain_name }}.
+proxy             IN    A       {{ ip_address }}
+wordpress         IN    CNAME   {{ hostname }}.{{ domain_name }}.
+mail              IN    A       {{ ip_address }}
+@                 IN    MX   10 mail
+container-proxy   IN    A       {{ ip_address }}
+traefik-dashboard IN    CNAME   {{ hostname }}.{{ domain_name }}.
+devops-lab        IN    CNAME   {{ hostname }}.{{ domain_name }}.

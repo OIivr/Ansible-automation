@@ -1,0 +1,14 @@
+<VirtualHost *:80>
+    ServerName wordpress.{{ hostname }}.{{ domain_name }}
+    DocumentRoot /var/www/html/wordpress
+
+    <Directory /var/www/html/wordpress>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog /var/log/httpd/wordpress-error.log
+    CustomLog /var/log/httpd/wordpress-access.log combined
+    ForensicLog /var/log/httpd/wordpress-forensic.log
+</VirtualHost>

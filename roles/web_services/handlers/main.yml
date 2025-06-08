@@ -1,0 +1,27 @@
+- name: check apache config
+  command: apachectl configtest
+  register: apache_configtest
+  changed_when: false
+  failed_when: apache_configtest.rc != 0
+  notify: restart httpd
+
+- name: restart httpd
+  systemd:
+    name: httpd
+    state: restarted
+    enabled: true
+
+- name: Reload systemd
+  command: systemctl daemon-reexec
+
+- name: Restart proxy service
+  systemd:
+    name: proxy
+    state: restarted
+    enabled: true
+
+- name: restart php-fpm
+  systemd:
+    name: php-fpm
+    state: restarted
+    enabled: yes

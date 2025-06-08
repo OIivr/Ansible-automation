@@ -1,0 +1,9 @@
+<VirtualHost *:80>
+    ServerName www.{{ hostname }}.{{ domain_name }}
+    DocumentRoot /var/www/html/www.{{ hostname }}/public_html
+    LogLevel debug
+
+    ErrorLog /var/log/httpd/www.{{ hostname }}-error.log
+    CustomLog /var/log/httpd/www.{{ hostname }}-access.log combined
+    ForensicLog /var/log/httpd/www.{{ hostname }}-forensic.log
+</VirtualHost>

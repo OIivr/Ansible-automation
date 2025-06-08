@@ -1,0 +1,23 @@
+- name: Install mod_security package
+  package:
+    name: mod_security
+    state: present
+
+- name: Ensure mod_security config directory exists
+  file:
+    path: /etc/httpd/modsecurity.d/local_rules
+    state: directory
+    mode: '0755'
+
+- name: Update modsecurity_localrules.conf with custom rules
+  copy:
+    dest: /etc/httpd/modsecurity.d/local_rules/modsecurity_localrules.conf
+    content: |
+      SecDefaultAction "phase:2,deny,log,status:406"
+      SecRule REQUEST_URI "etc/passwd" "id:'500001'"
+      SecRule REQUEST_URI "\.\./" "id:'500002'"
+      SecRule ARGS "<[Ss][Cc][Rr][Ii][Pp][Tt]" "id:'500003'"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart httpd

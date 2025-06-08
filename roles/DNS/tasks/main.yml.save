@@ -1,4 +1,4 @@
----
+named-checkconf---
 - name: DNS | Autoremove unneeded packages installed as dependencies
   dnf:
     autoremove: yes

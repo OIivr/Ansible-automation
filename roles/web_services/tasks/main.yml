@@ -1,0 +1,257 @@
+- name: Install dependencies
+  dnf:
+    name:
+      - httpd
+      - php
+      - php-mysqlnd
+      - python3-pexpect
+      - python3
+      - python3-pip
+      - php-mysqlnd
+      - php-fpm
+      - mariadb-server
+      - tar
+      - curl
+      - php-json
+      - python3-PyMySQL
+    state: present
+  tags: install
+
+- name: Configure default Apache vhost
+  template:
+    src: www.conf.j2
+    dest: "/etc/httpd/conf.d/www.{{ hostname }}.conf"
+  notify: check apache config
+  tags: config
+
+- name: Render index.html from template
+  template:
+    src: index.html.j2
+    dest: "/var/www/html/www.{{ hostname }}/public_html/index.html"
+  tags: content
+
+- name: Enable Apache
+  systemd:
+    name: httpd
+    state: started
+    enabled: true
+  tags: enable
+
+- name: Install Flask via pip3
+  pip:
+    name: flask
+    executable: pip3
+
+- name: Create proxy user
+  user:
+    name: proxy
+    system: yes
+    create_home: no
+- name: Create forensic log file
+  file:
+    path: /var/log/httpd/wordpress-forensic.log
+    state: touch
+    owner: apache
+    group: apache
+    mode: '0640'
+
+- name: Copy Flask app to /usr/local/lib
+  copy:
+    src: website.py
+    dest: /usr/local/lib/server.py
+    owner: proxy
+    group: proxy
+    mode: '0755'
+
+- name: Create systemd service for Flask app
+  copy:
+    dest: /etc/systemd/system/proxy.service
+    content: |
+      [Unit]
+      Description=Python Proxy Service
+
+      [Service]
+      ExecStart=/usr/bin/python3 /usr/local/lib/server.py
+      Environment=PYTHONUNBUFFERED=1
+      Restart=on-failure
+      Type=simple
+      User=proxy
+
+      [Install]
+      WantedBy=default.target
+  notify: Reload systemd
+
+- name: Enable and start proxy service
+  systemd:
+    name: proxy
+    state: started
+    enabled: true
+
+- name: Allow Apache to make network connections
+  seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+
+- name: Create Apache vhost config for proxy
+  template:
+    src: proxy.conf.j2
+    dest: "/etc/httpd/conf.d/proxy.{{ hostname }}.conf"
+  notify: check apache config
+
+- name: Ensure services are started and enabled
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - mariadb
+    - httpd
+    - php-fpm
+
+- name: Set root password and switch to mysql_native_password
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: Midavarki123
+    plugin: mysql_native_password
+    login_user: root
+    login_password: ''
+    state: present
+  ignore_errors: yes
+
+- name: Wait a few seconds for password change to take effect
+  pause:
+    seconds: 5
+
+- name: Confirm root password and plugin
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: Midavarki123
+    plugin: mysql_native_password
+    login_user: root
+    login_password: Midavarki123
+    state: present
+
+- name: Remove anonymous users
+  community.mysql.mysql_user:
+    name: ''
+    host_all: true
+    state: absent
+    login_user: root
+    login_password: Midavarki123
+
+- name: Disallow root login remotely
+  community.mysql.mysql_user:
+    name: root
+    host: "{{ item }}"
+    state: absent
+    login_user: root
+    login_password: Midavarki123
+  loop:
+    - "%"
+    - "{{ ansible_hostname }}"
+    - "{{ inventory_hostname }}"
+    - "{{ ansible_fqdn }}"
+
+- name: Remove test database
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_user: root
+    login_password: Midavarki123
+
+- name: Flush privileges
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: Midavarki123
+    query: "FLUSH PRIVILEGES;"
+
+- name: Create WordPress database
+  mysql_db:
+    name: WordPress
+    state: present
+    login_user: root
+    login_password: Midavarki123
+
+- name: Create WordPress DB user
+  mysql_user:
+    name: admin
+    password: password
+    priv: 'WordPress.*:ALL'
+    host: localhost
+    state: present
+    login_user: root
+    login_password: Midavarki123
+
+- name: Download WordPress
+  get_url:
+    url: https://wordpress.org/latest.tar.gz
+    dest: /tmp/wordpress.tar.gz
+
+- name: Unpack WordPress
+  unarchive:
+    src: /tmp/wordpress.tar.gz
+    dest: /var/www/html/
+    remote_src: yes
+
+- name: Set correct ownership for WordPress files
+  file:
+    path: /var/www/html/wordpress
+    owner: apache
+    group: apache
+    recurse: yes
+
+- name: Set SELinux context for WordPress directory
+  sefcontext:
+    target: "/var/www/html/wordpress"
+    setype: httpd_sys_rw_content_t
+    state: present
+
+- name: Apply SELinux context
+  command: restorecon -Rv /var/www/html/wordpress
+
+- name: Copy Apache virtual host config for WordPress
+  template:
+    src: wordpress.conf.j2
+    dest: "/etc/httpd/conf.d/wordpress.conf"
+  notify:
+    - restart httpd
+
+- name: Consolidate PHP logs
+  lineinfile:
+    path: /etc/php-fpm.conf
+    regexp: '^error_log'
+    line: "error_log = /var/log/httpd/php-errors.log"
+    create: yes
+  notify: restart php-fpm
+
+- name: Create log files
+  file:
+    path: "{{ item }}"
+    state: touch
+    owner: apache
+    group: apache
+    mode: '0644'
+  loop:
+    - /var/log/httpd/php-errors.log
+    - /var/log/httpd/www-php-errors.log
+
+- name: Create forensic log file for www
+  file:
+    path: /var/log/httpd/www.{{ hostname }}-forensic.log
+    state: touch
+    owner: apache
+    group: apache
+    mode: '0640'
+
+- name: Create forensic log file for wordpress
+  file:
+    path: /var/log/httpd/wordpress-forensic.log
+    state: touch
+    owner: apache
+    group: apache
+    mode: '0640'
+#-------------------
+- import_tasks: modsecurity.yml
