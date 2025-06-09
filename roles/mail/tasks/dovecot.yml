@@ -1,0 +1,187 @@
+- name: Enable IMAP and LMTP protocols
+  lineinfile:
+    path: /etc/dovecot/dovecot.conf
+    regexp: '^protocols ='
+    line: 'protocols = imap lmtp'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Enable mail_debug logging
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-logging.conf
+    regexp: '^mail_debug ='
+    line: 'mail_debug = yes'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Allow plain and login authentication
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-auth.conf
+    regexp: '^auth_mechanisms ='
+    line: 'auth_mechanisms = plain login'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Disable plaintext auth protection (!)
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-auth.conf
+    regexp: '^disable_plaintext_auth ='
+    line: 'disable_plaintext_auth = no'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Set auth_username_format to %n
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-auth.conf
+    regexp: '^auth_username_format ='
+    line: 'auth_username_format = %n'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Disable SSL for testing (!)
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-ssl.conf
+    regexp: '^ssl ='
+    line: 'ssl = no'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Set mail location to Maildir
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-mail.conf
+    regexp: '^mail_location ='
+    line: 'mail_location = maildir:~/mail'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Set mail_privileged_group to mail
+  lineinfile:
+    path: /etc/dovecot/conf.d/10-mail.conf
+    regexp: '^mail_privileged_group ='
+    line: 'mail_privileged_group = mail'
+    state: present
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Add dovecot user to mail group
+  user:
+    name: dovecot
+    groups: mail
+    append: yes
+  become: true
+
+- name: Configure Dovecot mailboxes (15-mailboxes.conf)
+  copy:
+    dest: /etc/dovecot/conf.d/15-mailboxes.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      namespace inbox {
+        mailbox Drafts {
+          auto = create
+          special_use = \Drafts
+        }
+
+        mailbox Junk {
+          auto = create
+          special_use = \Junk
+        }
+
+        mailbox Trash {
+          auto = create
+          special_use = \Trash
+        }
+
+        mailbox Sent {
+          auto = create
+          special_use = \Sent
+        }
+
+        mailbox "Sent Messages" {
+          auto = create
+          special_use = \Sent
+        }
+
+        mailbox Spam {
+          auto = create
+          special_use = \Junk
+        }
+      }
+  #notify: Restart dovecot
+
+
+- name: Ensure LMTP service block is correctly configured
+  replace:
+    path: /etc/dovecot/conf.d/10-master.conf
+    regexp: 'service lmtp \{([^{}]*|\{[^{}]*\})*\}'
+    replace: |
+      service lmtp {
+        unix_listener /var/spool/postfix/private/dovecot-lmtp {
+          mode = 0600
+          user = postfix
+          group = postfix
+        }
+      }
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Ensure auth service block is correctly configured
+  replace:
+    path: /etc/dovecot/conf.d/10-master.conf
+    regexp: 'service auth \{([^{}]*|\{[^{}]*\})*\}'
+    replace: |
+      service auth {
+        unix_listener /var/spool/postfix/private/auth {
+          mode = 0600
+          user = postfix
+          group = postfix
+        }
+      }
+    validate: 'doveconf -n %s'
+  become: true
+
+- name: Configure mailbox_transport in Postfix main.cf
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^mailbox_transport\s*='
+    line: 'mailbox_transport = lmtp:unix:private/dovecot-lmtp'
+    create: yes
+  notify: restart postfix
+  become: true
+
+- name: Configure submission service in Postfix master.cf
+  blockinfile:
+    path: /etc/postfix/master.cf
+    marker: "# {mark} ANSIBLE MANAGED SUBMISSION SERVICE"
+    block: |
+      submission inet n       -       n       -       -       smtpd
+        -o syslog_name=postfix/submission
+        -o smtpd_sasl_auth_enable=yes
+        -o smtpd_recipient_restrictions=permit_mynetworks,permit_sasl_authenticated,reject
+        -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+        -o smtpd_sasl_type=dovecot
+        -o smtpd_sasl_path=private/auth
+  become: true
+
+
+- name: Restart dovecot
+  service:
+    name: dovecot
+    state: restarted
+    enabled: true
+  become: true
+
+- name: Restart postfix
+  service:
+    name: postfix
+    state: restarted
+    enabled: true
+  become: true

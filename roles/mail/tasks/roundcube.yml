@@ -1,0 +1,140 @@
+- name: Install epel-release and dnf plugins core
+  dnf:
+    name:
+      - epel-release
+      - dnf-plugins-core
+    state: present
+
+- name: Enable CRB repository
+  command: dnf config-manager --set-enabled crb
+  args:
+    creates: /etc/yum.repos.d/crb.repo
+
+- name: Install required packages
+  dnf:
+    name:
+      - make
+      - ImageMagick
+      - ImageMagick-devel
+      - ImageMagick-perl
+      - pcre-devel
+      - zlib
+      - zlib-devel
+      - libzip
+      - libzip-devel
+      - libmcrypt-devel
+      - php
+      - php-fpm
+      - php-devel
+      - php-pear
+      - php-cli
+      - php-gd
+      - php-curl
+      - php-xml
+      - php-mysqlnd
+      - php-mbstring
+      - php-intl
+      - php-ldap
+      - mariadb
+      - mariadb-server
+      - httpd
+    state: present
+
+- name: Install PECL extensions
+  shell: "printf '\n' | pecl install {{ item }}"
+  args:
+    creates: "/usr/lib64/php/modules/{{ item }}.so"
+  loop:
+    - imagick
+    - mcrypt
+    - zip
+
+- name: Create PHP ini files for PECL extensions
+  copy:
+    dest: "/etc/php.d/20-{{ item }}.ini"
+    content: "extension={{ item }}\n"
+    mode: '0644'
+  loop:
+    - imagick
+    - mcrypt
+    - zip
+
+- name: Ensure httpd, mariadb and php-fpm are enabled and started
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - httpd
+    - mariadb
+    - php-fpm
+
+- name: Create Roundcube database
+  community.mysql.mysql_db:
+    name: roundcubemail
+    state: present
+    login_user: root
+    login_password: Midavarki123
+
+- name: Create Roundcube database user
+  community.mysql.mysql_user:
+    name: roundcube
+    password: $6$z3PX7178lprLvr1y$ntiCgD/an9XIY5JMmQ2pNVX9SkPcK1JoEyuL6Gu/cxKZMt/cWG/7AiH5JfoiXZ.VyTBqGQ0sofRhr9Hy88eaG0 # Midavarki123
+    priv: "roundcubemail.*:ALL"
+    #host: localhost
+    state: present
+    login_user: root
+    login_password: Midavarki123
+
+- name: Download Roundcube release archive
+  get_url:
+    url: "https://github.com/roundcube/roundcubemail/releases/download/1.6.1/roundcubemail-1.6.1-complete.tar.gz"
+    dest: "/tmp/roundcube-1.6.1.tar.gz"
+    mode: '0644'
+
+- name: Extract Roundcube archive
+  unarchive:
+    src: "/tmp/roundcube-1.6.1.tar.gz"
+    dest: /var/www/html/
+    remote_src: yes
+    creates: /var/www/html/roundcubemail-1.6.1-complete
+
+- name: Remove Roundcube archive
+  file:
+    path: "/tmp/roundcube-1.6.1.tar.gz"
+    state: absent
+
+- name: Rename extracted directory
+  command: mv /var/www/html/roundcubemail-1.6.1-complete /var/www/html/roundcubemail
+  args:
+    removes: /var/www/html/roundcubemail-1.6.1-complete
+    creates: /var/www/html/roundcubemail
+
+- name: Set ownership and permissions for Roundcube directory
+  file:
+    path: /var/www/html/roundcubemail
+    owner: apache
+    group: apache
+    mode: '0755'
+    recurse: yes
+
+- name: Set SELinux context for Roundcube directory
+  command: chcon -t httpd_sys_rw_content_t /var/www/html/roundcubemail -R
+
+- name: Create Apache VirtualHost config for Roundcube mail
+  template:
+    src: mail.conf.j2
+    dest: /etc/httpd/conf.d/mail.{{ hostname }}.{{ domain_name }}.conf
+
+- name: Restart httpd
+  service:
+    name: httpd
+    state: restarted
+
+- name: Ensure roundcube log directory exists
+  file:
+    path: /var/log/roundcube
+    owner: apache
+    group: apache
+    mode: '0755'
+    state: directory

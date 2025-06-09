@@ -1,0 +1,67 @@
+- name: Ensure inet_protocols is set to ipv4
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_protocols ='
+    line: 'inet_protocols = ipv4'
+    state: present
+    backup: yes
+
+- name: Ensure inet_interfaces is set to all
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_interfaces ='
+    line: 'inet_interfaces = all'
+    state: present
+
+- name: Set myhostname
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^myhostname ='
+    line: "myhostname = mail.{{ hostname }}.{{ domain_name }}"
+    state: present
+
+- name: Set myorigin to $mydomain
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^myorigin ='
+    line: 'myorigin = $mydomain'
+    state: present
+
+- name: Set mydestination
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^mydestination ='
+    line: "mydestination = mail.{{ hostname }}.{{ domain_name }}, localhost.{{ hostname }}.{{ domain_name }}, localhost, {{ hostname }}.{{ domain_name }}"
+    state: present
+
+- name: Ensure mynetworks_style is set to host
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^mynetworks_style ='
+    line: 'mynetworks_style = host'
+    state: present
+
+- name: Ensure relayhost is commented out
+  replace:
+    path: /etc/postfix/main.cf
+    regexp: '^relayhost =.*'
+    replace: '# relayhost removed'
+
+- name: Ensure mynetworks is not defined
+  replace:
+    path: /etc/postfix/main.cf
+    regexp: '^mynetworks =.*'
+    replace: '# mynetworks removed'
+
+- name: Restart postfix
+  service:
+    name: postfix
+    state: restarted
+    enabled: yes
+
+- name: Create mailuser
+  user:
+    name: mailuser
+    password: $6$z3PX7178lprLvr1y$ntiCgD/an9XIY5JMmQ2pNVX9SkPcK1JoEyuL6Gu/cxKZMt/cWG/7AiH5JfoiXZ.VyTBqGQ0sofRhr9Hy88eaG0 # Midavarki123
+    shell: /bin/bash
+    state: present

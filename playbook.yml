@@ -10,7 +10,8 @@
     reverse_zone_name: 88.17.172.in-addr.arpa
 
   roles:
-#  - etais
- # - firewall
-  #- DNS
+  - etais
+  - firewall
+  - DNS
   - web_services
+  - mail

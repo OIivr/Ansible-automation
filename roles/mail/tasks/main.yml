@@ -1,0 +1,9 @@
+- name: Install prerequisites
+  package:
+    name: postfix
+    name: dovecot
+    state: present
+
+- import_tasks: postfix.yml
+- import_tasks: dovecot.yml
+- import_tasks: roundcube.yml

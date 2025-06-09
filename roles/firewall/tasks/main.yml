@@ -1,14 +1,48 @@
-- name: Open necessary ports in firewalld
+- name: Open required TCP and UDP ports in firewalld
   firewalld:
     port: "{{ item }}"
     permanent: yes
     state: enabled
     immediate: yes
   loop:
-    - 53/tcp
+    # SSH
+    - 22/tcp
+    # WEB
+    - 443/tcp
+    - 80/tcp
+    # DNS
     - 53/udp
+    - 53/tcp
+    # CONSUL
     - 8301/udp
     - 8301/tcp
+    # MAIL
+    - 465/tcp
+    - 587/tcp
+    - 25/tcp
+    - 993/tcp
+    - 143/tcp
+    # FILESYSTEMS
+    - 2049/tcp
+    - 111/tcp
+    # SMB
+    - 445/tcp
+    - 139/tcp
+    # DOCKER
+    - 5005/tcp
+    # TRAEFIK
+    - 8080/tcp
+    - 8443/tcp
+    # KUBERNETES
+    - 6443/tcp
+    - 32210/tcp
+    - 10250/tcp
+    # MONITORING
+    - 30310/tcp
+    - 30000/tcp
+    - 30909/tcp
+    - 30910/tcp
+    - 514/tcp
 
 - name: Reload firewalld to apply changes
   command: firewall-cmd --reload
